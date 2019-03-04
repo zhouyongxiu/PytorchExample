@@ -32,7 +32,14 @@ def main(args):
 
     print("Train numbers:{:d}".format(len(train_datasets)))
 
-    model = resnet50(num_classes = args.num_class)
+    if args.pretrained:
+        model = resnet50(num_classes=1000)
+        model.load_state_dict(torch.load(args.pretrained_model))
+        channel_in = model.fc.in_features  # 获取fc层的输入通道数
+        # 然后把resnet的fc层替换成自己分类类别的fc层
+        model.fc = nn.Linear(channel_in, args.num_class)
+    else:
+        model = resnet50(num_classes=args.num_class)
     print(model)
     # cost
     model = model.to(device)
@@ -95,7 +102,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='for face verification')
     parser.add_argument("--num_class", default=2, type=int)
-    parser.add_argument("--epochs", default=40, type=int)
+    parser.add_argument("--epochs", default=20, type=int)
     # parser.add_argument("--net", default='resnet50', type=str)
     # parser.add_argument("--depth", default=50, type=int)
     parser.add_argument('--lr', default=1e-3, type=float)
@@ -103,6 +110,8 @@ if __name__ == '__main__':
     # parser.add_argument("--num_workers", default=2, type=int)
     parser.add_argument("--model_name", default='car', type=str)
     parser.add_argument("--model_path", default='./model', type=str)
+    parser.add_argument("--pretrained", default=True, type=bool)
+    parser.add_argument("--pretrained_model", default='./model/resnet50.pth', type=str)
     args = parser.parse_args()
 
     main(args)
