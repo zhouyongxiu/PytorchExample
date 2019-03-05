@@ -34,11 +34,16 @@ opencv == 3.4.0
 ### fine-tunning
 可以通过设置'pretrained'和'pretrained_model'两个选项来加载预训练模型，本项目提供了官方提供的resnet50预训练模型。  
 百度网盘  
-链接:https://pan.baidu.com/s/1-MyBSPE5r3QyG7lBGaPX-Q  密码:jq73
+链接:https://pan.baidu.com/s/1-MyBSPE5r3QyG7lBGaPX-Q  密码:jq73  
 使用预训练模型进行fine-tuning后，训练速度明显提高，验证集精度从原来的88.9%提升到了99.6%，效果提升明显。读者可以下载微调后的训练模型与之前的训练模型进行比较。  
 百度网盘  
 链接:https://pan.baidu.com/s/14mrtEh33iMoXt0VgyqD15w  密码:avgy
 
+### CenterLoss
+增加CenterLoss函数以实现自定义损失函数功能，读者可以用train_centerloss.py脚本进行训练，经测试，训练精度不如softmax。  
+CenterLoss参考代码  
+[MNIST_center_loss_pytorch](https://github.com/jxgu1016/MNIST_center_loss_pytorch)
+
 ### TODO
 ~~1.增加加载预训练模型以实现fine-tune功能。~~  
-2.增加centerloss函数以实现自定义损失函数功能。
+~~2.增加centerloss函数以实现自定义损失函数功能。~~

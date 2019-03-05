@@ -9,9 +9,25 @@ from torchvision import transforms
 from dataset import CarDateSet
 from resnet import resnet50, resnet34
 import argparse
+from CenterLoss import CenterLoss
+import torch.nn.functional as F
 
 # Device configuration
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+class Net(nn.Module):
+    def __init__(self,  num_class, center_dim):
+        super(Net, self).__init__()
+        # self.backbone = resnet50(num_classes=2)
+        self.ip1 = resnet50(num_classes=center_dim)
+        self.ip2 = nn.Linear(center_dim, num_class, bias=False)
+
+    def forward(self, x):
+        ip1 = self.ip1(x)
+        # ip1 = ip1.view(-1, 2)
+        # ip1 = self.ip1(x)
+        ip2 = self.ip2(ip1)
+        return ip1, F.log_softmax(ip2, dim=1)
 
 def main(args):
     # Create model
@@ -32,18 +48,22 @@ def main(args):
 
     print("Train numbers:{:d}".format(len(train_datasets)))
 
-    if args.pretrained:
-        model = resnet50(num_classes=1000)
-        model.load_state_dict(torch.load(args.pretrained_model))
-        channel_in = model.fc.in_features  # 获取fc层的输入通道数
-        # 然后把resnet的fc层替换成自己分类类别的fc层
-        model.fc = nn.Linear(channel_in, args.num_class)
-    else:
-        model = resnet50(num_classes=args.num_class)
+    # if args.pretrained:
+    #     model = resnet50(num_classes=1000)
+    #     model.load_state_dict(torch.load(args.pretrained_model))
+    #     channel_in = model.fc.in_features  # 获取fc层的输入通道数
+    #     # 然后把resnet的fc层替换成自己分类类别的fc层
+    #     model.fc = nn.Linear(channel_in, args.num_class)
+    # else:
+    model = Net(num_class=args.num_class, center_dim=args.center_dim)
     print(model)
+    # NLLLoss
+    nllloss = nn.NLLLoss().to(device)  # CrossEntropyLoss = log_softmax + NLLLoss
+    # CenterLoss
+    loss_weight = args.loss_weight
+    centerloss = CenterLoss(args.num_class, args.center_dim).to(device)
     # cost
     model = model.to(device)
-    cost = nn.CrossEntropyLoss().to(device)
     # Optimization
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-8)
 
@@ -57,11 +77,20 @@ def main(args):
             labels = labels.to(device)
 
             # Forward pass
-            outputs = model(images)
-            loss = cost(outputs, labels)
+            ip1, pred = model(images)
+            n_loss = nllloss(pred, labels)
+            c_loss = centerloss(labels, ip1)
+            loss = n_loss + loss_weight * c_loss
 
             if index % 10 == 0:
-                print (loss)
+                if torch.cuda.is_available:
+                    print('loss=%f, n_loss=%f,c_loss=%f' % (loss.data.cpu().numpy(),
+                                                            n_loss.data.cpu().numpy(),
+                                                            c_loss.data.cpu().numpy()))
+                else:
+                    print('loss=%f, n_loss=%f,c_loss=%f' % (loss.data.numpy(),
+                                                            n_loss.data.numpy(),
+                                                            c_loss.data.numpy()))
             # Backward and optimize
             optimizer.zero_grad()
             loss.backward()
@@ -82,10 +111,10 @@ def main(args):
                 images = images.to(device)
                 labels = labels.to(device)
                 # print prediction
-                outputs = model(images)
+                ip1, pred = model(images)
                 # equal prediction and acc
 
-                _, predicted = torch.max(outputs.data, 1)
+                _, predicted = torch.max(pred.data, 1)
                 # val_loader total
                 total += labels.size(0)
                 # add correct
@@ -102,6 +131,8 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='train hyper-parameter')
     parser.add_argument("--num_class", default=2, type=int)
+    parser.add_argument("--center_dim", default=2, type=int)
+    parser.add_argument("--loss_weight", default=1, type=float)
     parser.add_argument("--epochs", default=20, type=int)
     # parser.add_argument("--net", default='resnet50', type=str)
     # parser.add_argument("--depth", default=50, type=int)
@@ -110,8 +141,8 @@ if __name__ == '__main__':
     # parser.add_argument("--num_workers", default=2, type=int)
     parser.add_argument("--model_name", default='car', type=str)
     parser.add_argument("--model_path", default='./model', type=str)
-    parser.add_argument("--pretrained", default=True, type=bool)
-    parser.add_argument("--pretrained_model", default='./model/resnet50.pth', type=str)
+    # parser.add_argument("--pretrained", default=False, type=bool)
+    # parser.add_argument("--pretrained_model", default='./model/resnet50.pth', type=str)
     args = parser.parse_args()
 
     main(args)
